@@ -4,10 +4,18 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 from email import encoders
-from typing import List, Optional, Dict, Tuple
+from typing import Any, List, Optional, Dict, Tuple
 
 from pydantic import BaseModel
 from dify_plugin.file.file import File
+
+
+def parse_smtp_auth(value: Any) -> bool:
+    if value is None or value == "":
+        return True
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"true", "1", "yes", "y", "on"}
 
 
 class SendEmailToolParameters(BaseModel):
@@ -15,7 +23,6 @@ class SendEmailToolParameters(BaseModel):
     smtp_port: int
 
     email_account: str
-    email_password: str
     sender_address: str
 
     sender_to: List[str]
@@ -23,6 +30,8 @@ class SendEmailToolParameters(BaseModel):
     email_content: str
     encrypt_method: str
 
+    email_password: Optional[str] = None
+    smtp_auth: bool = True
     is_html: bool = False
     plain_text_content: Optional[str] = None
     attachments: Optional[List[File]] = None
@@ -31,6 +40,14 @@ class SendEmailToolParameters(BaseModel):
     bcc_recipients: List[str] = []
 
     reply_to_address: Optional[str] = None
+
+
+def _login_if_required(server, params: SendEmailToolParameters) -> None:
+    if not params.smtp_auth:
+        return
+    if not params.email_account or not params.email_password:
+        raise ValueError("SMTP authentication is enabled but email account or password is missing")
+    server.login(params.email_account, params.email_password)
 
 
 def send_mail(params: SendEmailToolParameters) -> Dict[str, Tuple[int, bytes]]:
@@ -85,14 +102,14 @@ def send_mail(params: SendEmailToolParameters) -> Dict[str, Tuple[int, bytes]]:
     all_recipients = params.sender_to + params.cc_recipients + params.bcc_recipients
 
     ctx = ssl.create_default_context()
-    
+
     if params.encrypt_method.upper() == "SSL":
         with smtplib.SMTP_SSL(params.smtp_server, params.smtp_port, context=ctx, timeout=timeout) as server:
-            server.login(params.email_account, params.email_password)
+            _login_if_required(server, params)
             return server.sendmail(params.sender_address, all_recipients, msg.as_string())
     else:  # NONE or TLS
         with smtplib.SMTP(params.smtp_server, params.smtp_port, timeout=timeout) as server:
             if params.encrypt_method.upper() == "TLS":
                 server.starttls(context=ctx)
-            server.login(params.email_account, params.email_password)
+            _login_if_required(server, params)
             return server.sendmail(params.sender_address, all_recipients, msg.as_string())

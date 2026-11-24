@@ -5,17 +5,21 @@ from typing import Any
 from dify_plugin import ToolProvider
 from dify_plugin.errors.tool import ToolProviderCredentialValidationError
 
+from tools.send import parse_smtp_auth
+
 
 class SmtpProvider(ToolProvider):
     def _validate_credentials(self, credentials: dict[str, Any]) -> None:
         """
-        Validate SMTP credentials by attempting to login to the SMTP server.
+        Validate SMTP credentials by connecting to the SMTP server.
+        Login is only attempted when SMTP authentication is enabled.
         """
         smtp_server = credentials.get("smtp_server", "")
         smtp_port = credentials.get("smtp_port", "")
         email_account = credentials.get("email_account", "")
-        email_password = credentials.get("email_password", "")
+        email_password = credentials.get("email_password", "") or ""
         encrypt_method = credentials.get("encrypt_method", "SSL")
+        use_auth = parse_smtp_auth(credentials.get("smtp_auth"))
 
         if not smtp_server:
             raise ToolProviderCredentialValidationError("SMTP server is required")
@@ -23,8 +27,10 @@ class SmtpProvider(ToolProvider):
             raise ToolProviderCredentialValidationError("SMTP port is required")
         if not email_account:
             raise ToolProviderCredentialValidationError("Email account is required")
-        if not email_password:
-            raise ToolProviderCredentialValidationError("Email password is required")
+        if use_auth and not email_password:
+            raise ToolProviderCredentialValidationError(
+                "Email password is required when SMTP authentication is enabled"
+            )
 
         try:
             smtp_port = int(smtp_port)
@@ -37,14 +43,21 @@ class SmtpProvider(ToolProvider):
         try:
             if encrypt_method.upper() == "SSL":
                 with smtplib.SMTP_SSL(smtp_server, smtp_port, context=ctx, timeout=timeout) as server:
-                    server.login(email_account, email_password)
+                    if use_auth:
+                        server.login(email_account, email_password)
             else:  # NONE or TLS
                 with smtplib.SMTP(smtp_server, smtp_port, timeout=timeout) as server:
                     if encrypt_method.upper() == "TLS":
                         server.starttls(context=ctx)
-                    server.login(email_account, email_password)
+                    if use_auth:
+                        server.login(email_account, email_password)
         except smtplib.SMTPAuthenticationError as e:
             raise ToolProviderCredentialValidationError(f"Authentication failed: {str(e)}")
+        except smtplib.SMTPNotSupportedError as e:
+            raise ToolProviderCredentialValidationError(
+                f"SMTP server does not support authentication: {str(e)}. "
+                "Set 'SMTP authentication' to False if your server does not require login."
+            )
         except smtplib.SMTPConnectError as e:
             raise ToolProviderCredentialValidationError(f"Failed to connect to SMTP server: {str(e)}")
         except smtplib.SMTPException as e:

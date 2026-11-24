@@ -7,7 +7,7 @@ from dify_plugin.entities.tool import ToolInvokeMessage
 from dify_plugin.file.file import File
 from tools.markdown_utils import convert_markdown_to_html
 
-from tools.send import SendEmailToolParameters, send_mail
+from tools.send import SendEmailToolParameters, parse_smtp_auth, send_mail
 
 
 class SendMailTool(Tool):
@@ -24,6 +24,7 @@ class SendMailTool(Tool):
         sender_address = raw_sender_address or sender
         email_rgx = re.compile(r"^[a-zA-Z0-9._-]+@[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)+$")
         password = self.runtime.credentials.get("email_password", "")
+        smtp_auth = parse_smtp_auth(self.runtime.credentials.get("smtp_auth"))
         smtp_server = self.runtime.credentials.get("smtp_server", "")
         if not smtp_server:
             yield self.create_text_message("please input smtp server")
@@ -152,6 +153,7 @@ class SendMailTool(Tool):
             smtp_port=smtp_port,
             email_account=sender,
             email_password=password,
+            smtp_auth=smtp_auth,
             sender_address=sender_address,
             sender_to=receivers_list,
             subject=subject,

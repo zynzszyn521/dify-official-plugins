@@ -13,15 +13,15 @@ credentials_for_provider:
     type: text-input
   email_password:
     help:
-      en_US: email password
-      zh_Hans: 邮件密码
+      en_US: email password (only required when SMTP authentication is enabled)
+      zh_Hans: 邮件密码（仅在启用 SMTP 认证时必填）
     label:
       en_US: email password
       zh_Hans: 邮件密码
     placeholder:
       en_US: email password
       zh_Hans: 邮件密码
-    required: true
+    required: false
     type: secret-input
   encrypt_method:
     help:
@@ -45,6 +45,25 @@ credentials_for_provider:
       value: TLS
     required: true
     type: select
+  smtp_auth:
+    help:
+      en_US: Whether the SMTP server requires login. Set to False if your server sends without authentication.
+      zh_Hans: SMTP 服务器是否需要登录认证。无需认证的发信服务器请选择“否”。
+    label:
+      en_US: SMTP authentication
+      zh_Hans: SMTP 认证
+    options:
+    - label:
+        en_US: "True"
+        zh_Hans: "是"
+      value: "true"
+    - label:
+        en_US: "False"
+        zh_Hans: "否"
+      value: "false"
+    required: false
+    type: select
+    default: "true"
   smtp_port:
     help:
       en_US: smtp server port
